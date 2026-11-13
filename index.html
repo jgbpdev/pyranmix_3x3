@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pyraminx Solver</title>
+  <meta name="description" content="Optimal Pyraminx solver: paint your puzzle's colours, get the shortest solution, and learn every algorithm forward and reverse.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com/3.4.5"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { display: ['Bangers', 'cursive'], sans: ['Inter', 'system-ui', 'sans-serif'] } } },
+    };
+  </script>
+  <style>
+    .sticker { cursor: pointer; transition: filter .12s; }
+    .sticker:hover { filter: brightness(0.88); }
+    #cube { touch-action: none; cursor: grab; }
+    #cube:active { cursor: grabbing; }
+    #viewer:fullscreen { background: #e0e0e0; padding: 2rem; overflow: auto; }
+    #viewer:fullscreen #cube { height: 72vh; }
+    .ctrl { background: #3378e0; color: #fff; border-radius: .3rem; padding: .5rem .9rem; font-weight: 600; font-size: .9rem; line-height: 1.2; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+    .ctrl:hover { background: #2563c9; }
+    .ctrl-icon { min-width: 2.6rem; font-size: 1.1rem; }
+    .speed-round { width: 2.6rem; height: 2.6rem; border-radius: 9999px; background: #2a2a2a; font-size: 1.5rem; font-weight: 700; line-height: 1; flex-shrink: 0; }
+    .speed-round:hover { background: #3a3a3a; }
+    .speed-chip { width: 100%; border-radius: 9999px; background: #2a2a2a; padding: .45rem 0; font-weight: 600; font-size: .9rem; }
+    .speed-chip:hover { background: #3a3a3a; }
+    .speed-chip.active { background: #fff; color: #111; }
+    .speed-slider { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 9999px; outline: none;
+      background: linear-gradient(to right, #fff var(--fill, 20%), #666 var(--fill, 20%)); }
+    .speed-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; cursor: pointer; }
+    .speed-slider::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body class="bg-[#e0e0e0] font-sans text-gray-900 antialiased">
+
+  <!-- Header -->
+  <header class="bg-[#c62828] text-white shadow">
+    <div class="mx-auto max-w-6xl px-4 py-3">
+      <h1 class="font-display text-3xl tracking-wide sm:text-4xl">Pyraminx Solver 3x3x3 (Optimal)</h1>
+    </div>
+  </header>
+  <nav class="bg-[#333]">
+    <div class="mx-auto flex max-w-6xl flex-wrap justify-center gap-2 px-4 py-2.5 text-sm font-semibold">
+      <a href="#solver" class="rounded bg-[#3b5998] px-4 py-2 text-white hover:opacity-90">Solver</a>
+      <a href="#how" class="rounded bg-[#55acee] px-4 py-2 text-white hover:opacity-90">How to solve</a>
+      <a href="#algorithms" class="rounded bg-[#ff4500] px-4 py-2 text-white hover:opacity-90">Algorithms</a>
+      <a href="#grp-notation" class="rounded bg-[#bd081c] px-4 py-2 text-white hover:opacity-90">Notation</a>
+      <a href="#grp-last-layer" class="rounded bg-[#25d366] px-4 py-2 text-white hover:opacity-90">Last layer</a>
+    </div>
+  </nav>
+
+  <main class="mx-auto max-w-6xl px-4 pb-16">
+
+    <!-- Solver -->
+    <section id="solver" class="scroll-mt-2 pt-2">
+      <div id="viewer">
+        <div id="palette" class="grid grid-cols-4 gap-3 pt-2 sm:gap-8"></div>
+
+        <div class="mt-4 grid items-center gap-4 lg:grid-cols-[1fr_260px]">
+          <svg id="cube" viewBox="-1.15 -1.15 2.3 2.3" class="mx-auto h-[340px] w-full max-w-[520px] select-none sm:h-[420px]" role="img" aria-label="3D Pyraminx – click stickers to paint, drag to rotate"></svg>
+          <div class="mx-auto w-full max-w-[260px] rounded-lg bg-white/60 p-3">
+            <div class="mb-1 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">Flat view (click to paint)</div>
+            <svg id="net" viewBox="-2.15 -0.15 4.3 3.764" class="w-full select-none" role="img" aria-label="Flat net of the Pyraminx"></svg>
+            <div class="mt-1 grid grid-cols-3 text-center text-[11px] font-semibold text-gray-500">
+              <span>Left</span><span>Front · Bottom</span><span>Right</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex gap-2">
+            <button id="btn-reset" class="ctrl">Reset</button>
+            <button id="btn-scramble" class="ctrl">Scramble</button>
+            <button id="btn-solved" class="ctrl hidden sm:inline-block">Solved</button>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-left" class="ctrl ctrl-icon" title="Turn view left" aria-label="Turn view left">↶</button>
+            <button id="btn-flip" class="ctrl ctrl-icon" title="Show bottom / top" aria-label="Flip view">⇅</button>
+            <button id="btn-right" class="ctrl ctrl-icon" title="Turn view right" aria-label="Turn view right">↷</button>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-full" class="ctrl ctrl-icon" title="Fullscreen" aria-label="Fullscreen">⛶</button>
+            <button id="btn-solve" class="ctrl">Solve!</button>
+          </div>
+        </div>
+
+        <div id="message" class="hidden"></div>
+
+        <!-- Solution / playback -->
+        <div id="solution" class="mt-5 hidden rounded-xl bg-white p-4 shadow">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="sol-title" class="font-display text-3xl tracking-wide text-[#c62828]"></h2>
+            <span id="sol-count" class="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700"></span>
+          </div>
+          <p id="sol-note" class="mt-1 text-sm text-gray-600"></p>
+
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-lg bg-blue-50 p-3">
+              <div class="text-xs font-bold uppercase tracking-wider text-blue-700">Forward (solves it)</div>
+              <code id="sol-forward" class="mt-1 block font-mono text-lg font-bold"></code>
+            </div>
+            <div class="rounded-lg bg-amber-50 p-3">
+              <div class="text-xs font-bold uppercase tracking-wider text-amber-700">Reverse (makes this position from solved)</div>
+              <code id="sol-reverse" class="mt-1 block font-mono text-lg font-bold"></code>
+            </div>
+          </div>
+
+          <div id="sol-moves" class="mt-4 flex flex-wrap gap-2"></div>
+
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            <button id="btn-first" class="ctrl ctrl-icon" title="Start" aria-label="Go to start">⏮</button>
+            <button id="btn-prev" class="ctrl ctrl-icon" title="Step back (←)" aria-label="Step back">◀</button>
+            <button id="btn-play" class="ctrl ctrl-icon" title="Play / pause (space)" aria-label="Play or pause">▶</button>
+            <button id="btn-next" class="ctrl ctrl-icon" title="Step forward (→)" aria-label="Step forward">▶▏</button>
+            <button id="btn-last" class="ctrl ctrl-icon" title="End" aria-label="Go to end">⏭</button>
+            <span id="sol-step" class="ml-2 text-sm font-semibold text-gray-700"></span>
+          </div>
+
+          <!-- Speed control -->
+          <div class="mx-auto mt-4 max-w-md rounded-2xl bg-[#111] px-5 py-4 text-white shadow-lg">
+            <div id="speed-label" class="text-center text-2xl font-bold tabular-nums">1.00x</div>
+            <div class="mt-3 flex items-center gap-4">
+              <button id="speed-down" class="speed-round" aria-label="Slower">−</button>
+              <input id="speed" type="range" min="0.1" max="3" step="0.05" value="1" class="speed-slider flex-1" aria-label="Playback speed">
+              <button id="speed-up" class="speed-round" aria-label="Faster">+</button>
+            </div>
+            <div id="speed-presets" class="mt-4 grid grid-cols-5 gap-2 text-center">
+              <div><button data-speed="1" class="speed-chip">1.0</button><div class="mt-1 text-[11px] text-gray-400">Normal</div></div>
+              <div><button data-speed="1.25" class="speed-chip">1.25</button></div>
+              <div><button data-speed="1.5" class="speed-chip">1.5</button></div>
+              <div><button data-speed="2" class="speed-chip">2.0</button></div>
+              <div><button data-speed="3" class="speed-chip">3.0</button></div>
+            </div>
+          </div>
+
+          <h3 class="mt-5 text-sm font-bold uppercase tracking-wider text-gray-500">Step-by-step pictures</h3>
+          <div id="sol-steps" class="mt-2 flex gap-2 overflow-x-auto pb-2"></div>
+        </div>
+      </div>
+
+      <!-- Scramble input -->
+      <div class="mt-5 rounded-xl bg-white p-4 shadow-sm">
+        <label for="scramble-input" class="text-sm font-semibold text-gray-700">Or type a scramble (e.g. <code class="font-mono">U L' R B' u r'</code>)</label>
+        <div class="mt-2 flex gap-2">
+          <input id="scramble-input" type="text" placeholder="R U' L B ..." class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 font-mono focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+          <button id="btn-apply" class="ctrl">Apply</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- How to use / solve -->
+    <section id="how" class="mt-12 scroll-mt-4">
+      <h2 class="font-display text-4xl tracking-wide text-[#c62828]">How to use the solver</h2>
+      <ol class="mt-3 grid gap-4 md:grid-cols-3">
+        <li class="rounded-xl bg-white p-4 shadow-sm"><span class="font-display text-2xl text-[#3378e0]">1. Paint</span>
+          <p class="mt-1 text-sm text-gray-700">Pick a colour and click the stickers on the 3D pyramid or the flat view, until they match your puzzle. Use ↶ ↷ ⇅ or drag to see the other faces.</p></li>
+        <li class="rounded-xl bg-white p-4 shadow-sm"><span class="font-display text-2xl text-[#3378e0]">2. Solve</span>
+          <p class="mt-1 text-sm text-gray-700">Press <b>Solve!</b> The solver searches every position and returns the shortest solution: tip turns, then at most 11 layer turns.</p></li>
+        <li class="rounded-xl bg-white p-4 shadow-sm"><span class="font-display text-2xl text-[#3378e0]">3. Follow</span>
+          <p class="mt-1 text-sm text-gray-700">Play the solution or step forward and back. Each step has a picture. The reverse sequence rebuilds the scramble from solved.</p></li>
+      </ol>
+
+      <h2 class="mt-10 font-display text-4xl tracking-wide text-[#c62828]">Beginner method (layer by layer)</h2>
+      <div class="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl bg-white p-4 shadow-sm"><h3 class="font-bold">Step 1 · Tips</h3>
+          <p class="mt-1 text-sm text-gray-700">Turn each of the 4 tips (u, l, r, b) so its colours match the centre piece just below it. Every tip takes at most one turn.</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><h3 class="font-bold">Step 1b · Centres</h3>
+          <p class="mt-1 text-sm text-gray-700">Choose a bottom colour. Turn the L, R and B layers so the three centres around the bottom face all show that colour.</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><h3 class="font-bold">Step 2 · First layer</h3>
+          <p class="mt-1 text-sm text-gray-700">Insert the 3 bottom edges with the triggers <code>R U R'</code> and <code>L' U' L</code>. See the <a class="text-blue-700 underline" href="#grp-first-layer">first-layer algorithms</a>.</p></div>
+        <div class="rounded-xl bg-white p-4 shadow-sm"><h3 class="font-bold">Step 3 · Last layer</h3>
+          <p class="mt-1 text-sm text-gray-700">Only 3 edges are left. Match your case to one of the <a class="text-blue-700 underline" href="#grp-last-layer">11 last-layer cases</a> and do its algorithm.</p></div>
+      </div>
+    </section>
+
+    <!-- Algorithms -->
+    <section id="algorithms" class="mt-12 scroll-mt-4">
+      <h2 class="font-display text-4xl tracking-wide text-[#c62828]">All algorithms – forward &amp; reverse</h2>
+      <p class="mt-1 max-w-3xl text-gray-700">Each card shows the <b class="text-blue-700">forward</b> algorithm and its <b class="text-amber-700">reverse</b> (inverse). Each picture shows the case that sequence solves, as a 3D view and a flat net. Press ▶ to watch it on the big pyramid.</p>
+      <div id="alg-tabs" class="mt-4 flex flex-wrap gap-2"></div>
+      <div id="alg-groups" class="mt-8 space-y-12"></div>
+    </section>
+  </main>
+
+  <footer class="bg-[#333] py-6 text-center text-sm text-gray-300">
+    Pyraminx Solver · optimal search in your browser · HTML, Tailwind CSS &amp; JavaScript
+  </footer>
+
+  <script src="js/pyraminx.js"></script>
+  <script src="js/algorithms.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
